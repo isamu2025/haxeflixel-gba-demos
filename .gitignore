@@ -1,0 +1,7 @@
+*.o
+*.elf
+*.map
+*.bin
+*.sav
+.DS_Store
+Thumbs.db
