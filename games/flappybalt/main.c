@@ -122,9 +122,10 @@ static int rnd_range(int min_val, int max_val) {
 /* Sound Functions */
 static void sound_init(void) {
     REG_SOUNDCNT_X = 0x0080; /* Sound master enable */
-    REG_SOUNDCNT_L = 0x0077; /* Max output volume */
+    REG_SOUNDCNT_L = 0xFF77; /* Enable Sound 1, 2, 3, 4 to Left & Right at Max Volume 7 */
     REG_SOUNDCNT_H = 0x0002; /* Enable PSG channels */
 }
+
 
 /* Flap Jump Chirp (Channel 1 upward frequency sweep) */
 static void snd_flap(void) {

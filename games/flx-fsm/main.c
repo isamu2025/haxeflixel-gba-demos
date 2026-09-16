@@ -96,36 +96,43 @@ static uint32_t rand_next(void) {
 /* Sound Functions */
 static void sound_init(void) {
     REG_SOUNDCNT_X = 0x0080; /* Sound Master Enable */
-    REG_SOUNDCNT_L = 0x0077; /* Full volume Left/Right */
-    REG_SOUNDCNT_H = 0x0002; /* DMG Channels Enable */
+    REG_SOUNDCNT_L = 0xFF77; /* Enable Sound 1, 2, 3, 4 to Left & Right at Max Volume 7 */
+    REG_SOUNDCNT_H = 0x0002; /* 100% PSG volume ratio */
 }
 
 static void snd_jump(void) {
-    REG_SOUND1CNT_L = 0x0013; /* Sweep Up */
-    REG_SOUND1CNT_H = 0xF180; /* Volume 15, duty 50% */
-    REG_SOUND1CNT_X = 0x8680; /* Play tone */
+    REG_SOUND1CNT_L = 0x0015; /* Sweep Up, shift 5, time 1 */
+    REG_SOUND1CNT_H = 0xF280; /* Volume 15, envelope decay step 2, 50% duty */
+    REG_SOUND1CNT_X = 0x8680; /* Initial frequency ~1200Hz, trigger */
 }
 
 static void snd_super_jump(void) {
-    REG_SOUND1CNT_L = 0x0012;
-    REG_SOUND1CNT_H = 0xF180;
-    REG_SOUND1CNT_X = 0x8720; /* Higher pitch */
+    REG_SOUND1CNT_L = 0x0013; /* Faster sweep Up, shift 3, time 1 */
+    REG_SOUND1CNT_H = 0xF280; /* Volume 15, envelope decay step 2, 50% duty */
+    REG_SOUND1CNT_X = 0x8740; /* Higher pitch ~1700Hz, trigger */
+}
+
+static void snd_ground_pound_start(void) {
+    REG_SOUND1CNT_L = 0x0019; /* Sweep Down, shift 1, time 1 */
+    REG_SOUND1CNT_H = 0xF180; /* Volume 15, 50% duty */
+    REG_SOUND1CNT_X = 0x8700; /* High starting pitch, sweep downwards */
 }
 
 static void snd_powerup(void) {
-    REG_SOUND2CNT_L = 0xF180;
-    REG_SOUND2CNT_H = 0x8780; /* Ascending chime */
+    REG_SOUND2CNT_L = 0xF380; /* Volume 15, envelope decay step 3, 50% duty */
+    REG_SOUND2CNT_H = 0x87C0; /* High chime ~1900Hz, trigger */
 }
 
 static void snd_ground_slam(void) {
-    REG_SOUND4CNT_L = 0xF020; /* Volume 15, envelope decay */
-    REG_SOUND4CNT_H = 0x8035; /* Noise burst */
+    REG_SOUND4CNT_L = 0xF022; /* Volume 15, envelope decay step 2 */
+    REG_SOUND4CNT_H = 0x8028; /* Heavy noise rumble / crash, trigger */
 }
 
 static void snd_walk_tick(void) {
-    REG_SOUND4CNT_L = 0x3010; /* Soft tick */
-    REG_SOUND4CNT_H = 0x8052;
+    REG_SOUND4CNT_L = 0x5101; /* Soft pop volume 5, envelope decay */
+    REG_SOUND4CNT_H = 0xC042; /* Short timed burst, trigger */
 }
+
 
 /* HUD System on BG0 */
 static void hud_clear(void) {
@@ -364,8 +371,10 @@ static void update_slime(void) {
                 slime.vy = 0;
                 slime.state_timer = 0;
                 slime.anim_frame = 3; /* pound frame */
+                snd_ground_pound_start();
                 break;
             }
+
 
             /* Transition back to Idle on landing */
             if (slime.is_grounded && slime.vy >= 0) {

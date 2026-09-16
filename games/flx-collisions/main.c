@@ -25,8 +25,9 @@ static int rnd_range(int min_val, int max_val) {
 /* Sound */
 static void sound_init(void) {
     REG_SOUNDCNT_X = 0x0080;
-    REG_SOUNDCNT_L = 0x0077;
+    REG_SOUNDCNT_L = 0xFF77;
     REG_SOUNDCNT_H = 0x0002;
+
 }
 static void snd_jump(void) {
     REG_SOUND1CNT_L = 0x0014;
