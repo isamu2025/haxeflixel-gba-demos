@@ -93,29 +93,51 @@ static uint32_t rand_next(void) {
     return rng_seed;
 }
 
+/* Original FlxFSM groundpound.ogg 29-frame pitch & volume envelope (60fps) */
+static int8_t gp_sound_frame = -1;
+
+static const uint16_t gp_freq_table[29] = {
+    0x071A, 0x0725, 0x072F, 0x0742, 0x0749, 0x0751, 0x0758, 0x0763,
+    0x076E, 0x0773, 0x077B, 0x0783, 0x078A, 0x078F, 0x0795, 0x079A,
+    0x079E, 0x07A4, 0x07AA, 0x07AD, 0x07B1, 0x07B7, 0x07BA, 0x07BD,
+    0x07C1, 0x07C4, 0x07C8, 0x07CB, 0x07CD
+};
+
+static const uint8_t gp_vol_table[29] = {
+    8, 8, 7, 7, 7, 7, 7, 6,
+    6, 6, 6, 5, 5, 5, 5, 4,
+    4, 4, 3, 3, 3, 2, 2, 2,
+    1, 1, 1, 0, 0
+};
+
 /* Sound Functions */
 static void sound_init(void) {
     REG_SOUNDCNT_X = 0x0080; /* Sound Master Enable */
     REG_SOUNDCNT_L = 0xFF77; /* Enable Sound 1, 2, 3, 4 to Left & Right at Max Volume 7 */
     REG_SOUNDCNT_H = 0x0002; /* 100% PSG volume ratio */
+    gp_sound_frame = -1;
 }
 
 static void snd_jump(void) {
+    gp_sound_frame = -1;
     REG_SOUND1CNT_L = 0x0015; /* Sweep Up, shift 5, time 1 */
-    REG_SOUND1CNT_H = 0xF280; /* Volume 15, envelope decay step 2, 50% duty */
-    REG_SOUND1CNT_X = 0x8680; /* Initial frequency ~1200Hz, trigger */
+    REG_SOUND1CNT_H = 0xB280; /* Volume 11 (gentle jump), decay step 2, 50% duty */
+    REG_SOUND1CNT_X = 0x8680; /* Initial frequency ~1000Hz, trigger */
 }
 
 static void snd_super_jump(void) {
-    REG_SOUND1CNT_L = 0x0013; /* Faster sweep Up, shift 3, time 1 */
-    REG_SOUND1CNT_H = 0xF280; /* Volume 15, envelope decay step 2, 50% duty */
-    REG_SOUND1CNT_X = 0x8740; /* Higher pitch ~1700Hz, trigger */
+    gp_sound_frame = -1;
+    REG_SOUND1CNT_L = 0x0014; /* Sweep Up, shift 4, time 1 */
+    REG_SOUND1CNT_H = 0xE280; /* Volume 14 (powerful boost), decay step 2, 50% duty */
+    REG_SOUND1CNT_X = 0x8720; /* Higher pitch ~1560Hz, trigger */
 }
 
+/* Ground Pound charge swell: rising pitch ~570Hz -> 2500Hz matching groundpound.ogg */
 static void snd_ground_pound_start(void) {
-    REG_SOUND1CNT_L = 0x0019; /* Sweep Down, shift 1, time 1 */
-    REG_SOUND1CNT_H = 0xF180; /* Volume 15, 50% duty */
-    REG_SOUND1CNT_X = 0x8700; /* High starting pitch, sweep downwards */
+    REG_SOUND1CNT_L = 0; /* Clear hardware sweep */
+    REG_SOUND1CNT_H = (gp_vol_table[0] << 12) | 0x0080; /* Soft volume 8, 50% duty */
+    REG_SOUND1CNT_X = 0x8000 | gp_freq_table[0]; /* Trigger initial ~571Hz */
+    gp_sound_frame = 1;
 }
 
 static void snd_powerup(void) {
@@ -123,14 +145,44 @@ static void snd_powerup(void) {
     REG_SOUND2CNT_H = 0x87C0; /* High chime ~1900Hz, trigger */
 }
 
+/* Ground slam landing: bass drop 541Hz -> 180Hz + soft debris noise */
 static void snd_ground_slam(void) {
-    REG_SOUND4CNT_L = 0xF022; /* Volume 15, envelope decay step 2 */
-    REG_SOUND4CNT_H = 0x8028; /* Heavy noise rumble / crash, trigger */
+    /* Stop charge sound */
+    gp_sound_frame = -1;
+
+    /* Channel 1: Bass drop thump matching groundpoundfinish.ogg */
+    REG_SOUND1CNT_L = 0x001B; /* Sweep Down, shift 3, time 1 */
+    REG_SOUND1CNT_H = 0xC280; /* Volume 12, decay step 2, 50% duty */
+    REG_SOUND1CNT_X = 0x870D; /* Initial ~541Hz, trigger */
+
+    /* Channel 4: Low-frequency impact rumble */
+    REG_SOUND4CNT_L = 0x8111; /* Volume 8, envelope decay step 1 */
+    REG_SOUND4CNT_H = 0x8053; /* Low-frequency division ratio 5, deep thud */
 }
 
 static void snd_walk_tick(void) {
     REG_SOUND4CNT_L = 0x5101; /* Soft pop volume 5, envelope decay */
     REG_SOUND4CNT_H = 0xC042; /* Short timed burst, trigger */
+}
+
+static void sound_update(void) {
+    if (gp_sound_frame >= 0) {
+        if (gp_sound_frame < 29) {
+            uint8_t vol = gp_vol_table[gp_sound_frame];
+            uint16_t freq = gp_freq_table[gp_sound_frame];
+            if (vol == 0) {
+                REG_SOUND1CNT_H = 0;
+                gp_sound_frame = -1;
+            } else {
+                REG_SOUND1CNT_H = (vol << 12) | 0x0080;
+                REG_SOUND1CNT_X = freq; /* Smooth glide without phase reset */
+                gp_sound_frame++;
+            }
+        } else {
+            REG_SOUND1CNT_H = 0;
+            gp_sound_frame = -1;
+        }
+    }
 }
 
 
@@ -226,6 +278,8 @@ static void reset_game(void) {
 
     shake_timer = 0;
     ground_pound_info_timer = 0;
+    gp_sound_frame = -1;
+    REG_SOUND1CNT_H = 0;
 
     hud_clear();
     hud_print(1, 1, "LEFT & RIGHT to move", 1);
@@ -632,6 +686,9 @@ int main(void) {
 
         /* Flush shadow OAM to hardware */
         flush_oam();
+
+        /* Update sound envelopes */
+        sound_update();
     }
 
     return 0;
